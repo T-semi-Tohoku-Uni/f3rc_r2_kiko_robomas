@@ -156,7 +156,7 @@ void HAL_FDCAN_RxFifo1Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo1ITs)
 			Error_Handler();
 		}
 
-		if (RxHeader.Identifier == 0x300) {
+		if (RxHeader.Identifier == 0x400) {
 
 		}
 	}
@@ -169,7 +169,7 @@ void FDCAN_RxTxSettings(void){
 	FDCAN_Filter_settings.FilterType = FDCAN_FILTER_RANGE;
 	FDCAN_Filter_settings.FilterConfig = FDCAN_FILTER_TO_RXFIFO1;
 	FDCAN_Filter_settings.FilterID1 = 0x200;
-	FDCAN_Filter_settings.FilterID2 = 0x310;
+	FDCAN_Filter_settings.FilterID2 = 0x500;
 
 	TxHeader.Identifier = 0x000;
 	TxHeader.IdType = FDCAN_STANDARD_ID;
