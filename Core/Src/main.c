@@ -21,17 +21,30 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-
+typedef struct{
+	uint16_t CANID;
+	uint8_t motorID;
+	int16_t trgVel;
+	volatile int16_t actVel;
+	volatile int16_t p_actVel;
+	volatile int16_t cu;
+	double angle;
+	int16_t actCurrent;
+	float hensa;
+	float ind;
+	float w;
+}motor;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define true 1
+#define false 0
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -41,13 +54,29 @@
 
 /* Private variables ---------------------------------------------------------*/
 FDCAN_HandleTypeDef hfdcan1;
+FDCAN_HandleTypeDef hfdcan3;
 
 TIM_HandleTypeDef htim6;
 
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
+FDCAN_TxHeaderTypeDef TxHeader;
+FDCAN_RxHeaderTypeDef RxHeader;
+FDCAN_TxHeaderTypeDef TxHeader_motor;
+FDCAN_RxHeaderTypeDef RxHeader_motor;
+FDCAN_FilterTypeDef sFilterConfig;
 
+uint8_t TxData[8] = {};
+uint8_t RxData[8] = {};
+uint8_t TxData_motor[8] = {};
+uint8_t RxData_motor[8] = {};
+uint32_t TxMailbox;
+
+motor robomas[1] = {
+		{0x201, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+};
+volatile float k_p = 7, k_i = 0.5, k_d = 0.0001;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -56,13 +85,169 @@ static void MX_GPIO_Init(void);
 static void MX_FDCAN1_Init(void);
 static void MX_TIM6_Init(void);
 static void MX_USART2_UART_Init(void);
+static void MX_FDCAN3_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
+	if(htim == &htim6){
 
+		int i = 0;
+		robomas[i].hensa = robomas[i].trgVel - robomas[i].actVel;
+		if (robomas[i].hensa >= 1000) robomas[i].hensa = 1000;
+		else if (robomas[i].hensa <= -1000) robomas[i].hensa = -1000;
+		float d = (robomas[i].actVel - robomas[i].p_actVel) / 0.001;
+		robomas[i].ind += robomas[i].hensa*0.1;
+		if (d >= 30000) d = 30000;
+		else if (d <= -30000) d = -30000;
+		if (robomas[i].ind >= 10000) robomas[i].ind = 10000;
+		else if (robomas[i].ind <= -10000) robomas[i].ind = -10000;
+
+
+		float t = k_p*robomas[i].hensa;
+		if (t>=10000) t = 10000;
+		else if (t<=-10000) t = -10000;
+		robomas[i].cu = (int16_t)(t+k_i*robomas[i].ind+k_d*d);
+		if (robomas[i].cu <= -10000) robomas[i].cu = -10000;
+		else if (robomas[i].cu >= 10000) robomas[i].cu = 10000;
+
+
+		TxData_motor[i*2] = (robomas[i].cu) >> 8;
+		TxData_motor[i*2+1] = (uint8_t)((robomas[i].cu) & 0xff);
+		robomas[i].p_actVel = robomas[i].actVel;
+
+		if (HAL_FDCAN_AddMessageToTxFifoQ(&hfdcan3, &TxHeader_motor, TxData_motor) != HAL_OK){
+			printf("addmassage is error\r\n");
+			Error_Handler();
+		}
+	}
+}
+
+void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs){
+	if ((RxFifo0ITs & FDCAN_IT_RX_FIFO0_NEW_MESSAGE) != RESET) {
+
+	        /* Retrieve Rx messages from RX FIFO0 */
+		if (HAL_FDCAN_GetRxMessage(&hfdcan3, FDCAN_RX_FIFO0, &RxHeader_motor, RxData_motor) != HAL_OK) {
+			printf("fdcan_getrxmessage_motor is error\r\n");
+			Error_Handler();
+		}
+		int i = 0;
+		if (RxHeader_motor.Identifier == (robomas[i].CANID)) {
+			robomas[i].angle = (int16_t)((RxData_motor[0] << 8) | RxData_motor[1]);
+			robomas[i].actVel = (int16_t)((RxData_motor[2] << 8) | RxData_motor[3]);
+			robomas[i].actCurrent = (int16_t)((RxData_motor[4] << 8) | RxData_motor[5]);
+		}
+
+
+	}
+
+}
+
+void HAL_FDCAN_RxFifo1Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo1ITs){
+	if ((RxFifo1ITs & FDCAN_IT_RX_FIFO1_NEW_MESSAGE) != RESET) {
+
+	        /* Retrieve Rx messages from RX FIFO0 */
+
+		if (HAL_FDCAN_GetRxMessage(&hfdcan1, FDCAN_RX_FIFO1, &RxHeader, RxData) != HAL_OK) {
+			printf("fdcan_getrxmessage is error\r\n");
+			Error_Handler();
+		}
+
+		if (RxHeader.Identifier == 0x300) {
+
+		}
+	}
+}
+
+void FDCAN_RxTxSettings(void){
+	FDCAN_FilterTypeDef FDCAN_Filter_settings;
+	FDCAN_Filter_settings.IdType = FDCAN_STANDARD_ID;
+	FDCAN_Filter_settings.FilterIndex = 0;
+	FDCAN_Filter_settings.FilterType = FDCAN_FILTER_RANGE;
+	FDCAN_Filter_settings.FilterConfig = FDCAN_FILTER_TO_RXFIFO1;
+	FDCAN_Filter_settings.FilterID1 = 0x200;
+	FDCAN_Filter_settings.FilterID2 = 0x310;
+
+	TxHeader.Identifier = 0x000;
+	TxHeader.IdType = FDCAN_STANDARD_ID;
+	TxHeader.TxFrameType = FDCAN_DATA_FRAME;
+	TxHeader.DataLength = FDCAN_DLC_BYTES_8;
+	TxHeader.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
+	TxHeader.BitRateSwitch = FDCAN_BRS_ON;
+	TxHeader.FDFormat = FDCAN_FD_CAN;
+	TxHeader.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
+	TxHeader.MessageMarker = 0;
+
+
+	if (HAL_FDCAN_ConfigFilter(&hfdcan1, &FDCAN_Filter_settings) != HAL_OK){
+		printf("fdcan_configfilter is error\r\n");
+		Error_Handler();
+	}
+
+	if (HAL_FDCAN_ConfigGlobalFilter(&hfdcan1, FDCAN_REJECT, FDCAN_FILTER_REJECT, FDCAN_FILTER_REMOTE, FDCAN_FILTER_REMOTE) != HAL_OK){
+		printf("fdcan_configglobalfilter is error\r\n");
+		Error_Handler();
+	}
+
+	if (HAL_FDCAN_Start(&hfdcan1) != HAL_OK) {
+		printf("fdcan_start is error\r\n");
+		Error_Handler();
+	}
+
+	if (HAL_FDCAN_ActivateNotification(&hfdcan1, FDCAN_IT_RX_FIFO1_NEW_MESSAGE, 0) != HAL_OK){
+		printf("fdcan_activatenotification is error\r\n");
+		Error_Handler();
+	}
+}
+
+void FDCAN_motor_RxTxSettings(void) {
+	FDCAN_FilterTypeDef FDCAN_Filter_settings_motor;
+	FDCAN_Filter_settings_motor.IdType = FDCAN_STANDARD_ID;
+	FDCAN_Filter_settings_motor.FilterIndex = 0;
+	FDCAN_Filter_settings_motor.FilterType = FDCAN_FILTER_RANGE;
+	FDCAN_Filter_settings_motor.FilterConfig = FDCAN_FILTER_TO_RXFIFO0;
+	FDCAN_Filter_settings_motor.FilterID1 = 0x200;
+	FDCAN_Filter_settings_motor.FilterID2 = 0x210;
+
+	TxHeader_motor.Identifier = 0x200;
+	TxHeader_motor.IdType = FDCAN_STANDARD_ID;
+	TxHeader_motor.TxFrameType = FDCAN_DATA_FRAME;
+	TxHeader_motor.DataLength = FDCAN_DLC_BYTES_8;
+	TxHeader_motor.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
+	TxHeader_motor.BitRateSwitch = FDCAN_BRS_OFF;
+	TxHeader_motor.FDFormat = FDCAN_CLASSIC_CAN;
+	TxHeader_motor.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
+	TxHeader_motor.MessageMarker = 0;
+
+	if (HAL_FDCAN_ConfigFilter(&hfdcan3, &FDCAN_Filter_settings_motor) != HAL_OK){
+		printf("fdcan_configfilter is error\r\n");
+		Error_Handler();
+	}
+
+	if (HAL_FDCAN_ConfigGlobalFilter(&hfdcan3, FDCAN_REJECT, FDCAN_FILTER_REJECT, FDCAN_FILTER_REMOTE, FDCAN_FILTER_REMOTE)){
+		printf("fdcan_configglobalfilter is error\r\n");
+		Error_Handler();
+	}
+
+	if (HAL_FDCAN_Start(&hfdcan3) != HAL_OK) {
+		printf("fdcan_start is error\r\n");
+		Error_Handler();
+	}
+
+	if (HAL_FDCAN_ActivateNotification(&hfdcan3, FDCAN_IT_RX_FIFO0_NEW_MESSAGE, 0) != HAL_OK){
+		printf("fdcan_activatenotification is error\r\n");
+		Error_Handler();
+	}
+}
+
+int _write(int file, char *ptr, int len)
+{
+    HAL_UART_Transmit(&huart2,(uint8_t *)ptr,len,10);
+    return len;
+}
 /* USER CODE END 0 */
 
 /**
@@ -97,8 +282,14 @@ int main(void)
   MX_FDCAN1_Init();
   MX_TIM6_Init();
   MX_USART2_UART_Init();
+  MX_FDCAN3_Init();
   /* USER CODE BEGIN 2 */
-
+  printf("start\r\n");
+  FDCAN_motor_RxTxSettings();
+  printf("can_motor_start\r\n");
+  FDCAN_RxTxSettings();
+  printf("can_main_start\r\n");
+  HAL_TIM_Base_Start_IT(&htim6);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -198,6 +389,49 @@ static void MX_FDCAN1_Init(void)
   /* USER CODE BEGIN FDCAN1_Init 2 */
 
   /* USER CODE END FDCAN1_Init 2 */
+
+}
+
+/**
+  * @brief FDCAN3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_FDCAN3_Init(void)
+{
+
+  /* USER CODE BEGIN FDCAN3_Init 0 */
+
+  /* USER CODE END FDCAN3_Init 0 */
+
+  /* USER CODE BEGIN FDCAN3_Init 1 */
+
+  /* USER CODE END FDCAN3_Init 1 */
+  hfdcan3.Instance = FDCAN3;
+  hfdcan3.Init.ClockDivider = FDCAN_CLOCK_DIV1;
+  hfdcan3.Init.FrameFormat = FDCAN_FRAME_FD_BRS;
+  hfdcan3.Init.Mode = FDCAN_MODE_NORMAL;
+  hfdcan3.Init.AutoRetransmission = DISABLE;
+  hfdcan3.Init.TransmitPause = DISABLE;
+  hfdcan3.Init.ProtocolException = DISABLE;
+  hfdcan3.Init.NominalPrescaler = 4;
+  hfdcan3.Init.NominalSyncJumpWidth = 1;
+  hfdcan3.Init.NominalTimeSeg1 = 15;
+  hfdcan3.Init.NominalTimeSeg2 = 2;
+  hfdcan3.Init.DataPrescaler = 2;
+  hfdcan3.Init.DataSyncJumpWidth = 1;
+  hfdcan3.Init.DataTimeSeg1 = 15;
+  hfdcan3.Init.DataTimeSeg2 = 4;
+  hfdcan3.Init.StdFiltersNbr = 1;
+  hfdcan3.Init.ExtFiltersNbr = 0;
+  hfdcan3.Init.TxFifoQueueMode = FDCAN_TX_FIFO_OPERATION;
+  if (HAL_FDCAN_Init(&hfdcan3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN FDCAN3_Init 2 */
+
+  /* USER CODE END FDCAN3_Init 2 */
 
 }
 
