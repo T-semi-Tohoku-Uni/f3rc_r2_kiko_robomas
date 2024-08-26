@@ -73,11 +73,12 @@ uint8_t TxData_motor[8] = {};
 uint8_t RxData_motor[8] = {};
 uint32_t TxMailbox;
 
-motor robomas[1] = {
+motor robomas[3] = {
 		{0x201, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0x202, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0x203, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 };
+uint8_t state = 0, state_kiko = 3;
 volatile float k_p = 7, k_i = 0.5, k_d = 0.0001;
 /* USER CODE END PV */
 
@@ -96,7 +97,17 @@ static void MX_FDCAN3_Init(void);
 /* USER CODE BEGIN 0 */
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 	if(htim == &htim6){
-		for (int i = 0; i <=3; i++){
+		if (state_kiko == state){
+			robomas[0].trgVel = 36 * 60;
+			robomas[1].trgVel = -36 * 60;
+			robomas[2].trgVel = -36 * 60;
+		}
+		else{
+			for(int i = 0; i< 2; i++){
+				robomas[i].trgVel = 0;
+			}
+		}
+		for (int i = 0; i < 3; i++){
 			int i = 0;
 			robomas[i].hensa = robomas[i].trgVel - robomas[i].actVel;
 			if (robomas[i].hensa >= 1000) robomas[i].hensa = 1000;
@@ -159,8 +170,8 @@ void HAL_FDCAN_RxFifo1Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo1ITs)
 			Error_Handler();
 		}
 
-		if (RxHeader.Identifier == 0x400) {
-
+		if (RxHeader.Identifier == 0x100) {
+			RxData[0] = state;
 		}
 	}
 }
@@ -261,7 +272,7 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-
+	setbuf(stdout, NULL);
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
