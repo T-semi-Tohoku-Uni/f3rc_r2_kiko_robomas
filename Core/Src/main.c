@@ -74,7 +74,9 @@ uint8_t RxData_motor[8] = {};
 uint32_t TxMailbox;
 
 motor robomas[1] = {
-		{0x201, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+		{0x201, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		{0x202, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		{0x203, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 };
 volatile float k_p = 7, k_i = 0.5, k_d = 0.0001;
 /* USER CODE END PV */
@@ -94,30 +96,31 @@ static void MX_FDCAN3_Init(void);
 /* USER CODE BEGIN 0 */
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 	if(htim == &htim6){
-
-		int i = 0;
-		robomas[i].hensa = robomas[i].trgVel - robomas[i].actVel;
-		if (robomas[i].hensa >= 1000) robomas[i].hensa = 1000;
-		else if (robomas[i].hensa <= -1000) robomas[i].hensa = -1000;
-		float d = (robomas[i].actVel - robomas[i].p_actVel) / 0.001;
-		robomas[i].ind += robomas[i].hensa*0.1;
-		if (d >= 30000) d = 30000;
-		else if (d <= -30000) d = -30000;
-		if (robomas[i].ind >= 10000) robomas[i].ind = 10000;
-		else if (robomas[i].ind <= -10000) robomas[i].ind = -10000;
-
-
-		float t = k_p*robomas[i].hensa;
-		if (t>=10000) t = 10000;
-		else if (t<=-10000) t = -10000;
-		robomas[i].cu = (int16_t)(t+k_i*robomas[i].ind+k_d*d);
-		if (robomas[i].cu <= -10000) robomas[i].cu = -10000;
-		else if (robomas[i].cu >= 10000) robomas[i].cu = 10000;
+		for (int i = 0; i <=3; i++){
+			int i = 0;
+			robomas[i].hensa = robomas[i].trgVel - robomas[i].actVel;
+			if (robomas[i].hensa >= 1000) robomas[i].hensa = 1000;
+			else if (robomas[i].hensa <= -1000) robomas[i].hensa = -1000;
+			float d = (robomas[i].actVel - robomas[i].p_actVel) / 0.001;
+			robomas[i].ind += robomas[i].hensa*0.1;
+			if (d >= 30000) d = 30000;
+			else if (d <= -30000) d = -30000;
+			if (robomas[i].ind >= 10000) robomas[i].ind = 10000;
+			else if (robomas[i].ind <= -10000) robomas[i].ind = -10000;
 
 
-		TxData_motor[i*2] = (robomas[i].cu) >> 8;
-		TxData_motor[i*2+1] = (uint8_t)((robomas[i].cu) & 0xff);
-		robomas[i].p_actVel = robomas[i].actVel;
+			float t = k_p*robomas[i].hensa;
+			if (t>=10000) t = 10000;
+			else if (t<=-10000) t = -10000;
+			robomas[i].cu = (int16_t)(t+k_i*robomas[i].ind+k_d*d);
+			if (robomas[i].cu <= -10000) robomas[i].cu = -10000;
+			else if (robomas[i].cu >= 10000) robomas[i].cu = 10000;
+
+
+			TxData_motor[i*2] = (robomas[i].cu) >> 8;
+			TxData_motor[i*2+1] = (uint8_t)((robomas[i].cu) & 0xff);
+			robomas[i].p_actVel = robomas[i].actVel;
+		}
 
 		if (HAL_FDCAN_AddMessageToTxFifoQ(&hfdcan3, &TxHeader_motor, TxData_motor) != HAL_OK){
 			printf("addmassage is error\r\n");
