@@ -182,7 +182,7 @@ void FDCAN_RxTxSettings(void){
 	FDCAN_Filter_settings.FilterIndex = 0;
 	FDCAN_Filter_settings.FilterType = FDCAN_FILTER_RANGE;
 	FDCAN_Filter_settings.FilterConfig = FDCAN_FILTER_TO_RXFIFO1;
-	FDCAN_Filter_settings.FilterID1 = 0x200;
+	FDCAN_Filter_settings.FilterID1 = 0x000;
 	FDCAN_Filter_settings.FilterID2 = 0x500;
 
 	TxHeader.Identifier = 0x000;
