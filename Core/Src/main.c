@@ -171,7 +171,7 @@ void HAL_FDCAN_RxFifo1Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo1ITs)
 		}
 
 		if (RxHeader.Identifier == 0x100) {
-			RxData[0] = state;
+			state = RxData[0];
 		}
 	}
 }
