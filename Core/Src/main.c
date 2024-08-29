@@ -79,6 +79,7 @@ motor robomas[3] = {
 		{0x203, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 };
 uint8_t state = 0, state_kiko = 3;
+uint8_t sub_state = 0;
 volatile float k_p = 7, k_i = 0.5, k_d = 0.0001;
 /* USER CODE END PV */
 
@@ -103,7 +104,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 			robomas[2].trgVel = -36 * 60;
 		}
 		else{
-			for(int i = 0; i< 2; i++){
+			for(int i = 0; i< 3; i++){
 				robomas[i].trgVel = 0;
 			}
 		}
@@ -172,6 +173,7 @@ void HAL_FDCAN_RxFifo1Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo1ITs)
 
 		if (RxHeader.Identifier == 0x100) {
 			state = RxData[0];
+			sub_state = RxData[1];
 		}
 	}
 }
