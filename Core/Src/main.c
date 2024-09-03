@@ -98,18 +98,10 @@ static void MX_FDCAN3_Init(void);
 /* USER CODE BEGIN 0 */
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 	if(htim == &htim6){
-		if (state_kiko == state){
-			robomas[0].trgVel = 36 * 60;
-			robomas[1].trgVel = -36 * 60;
-			robomas[2].trgVel = -36 * 60;
-		}
-		else{
-			for(int i = 0; i< 3; i++){
-				robomas[i].trgVel = 0;
-			}
-		}
-		for (int i = 0; i < 3; i++){
-			int i = 0;
+		robomas[0].trgVel = 36 * 45;
+		robomas[1].trgVel = -36 * 90;
+		robomas[2].trgVel = -36 * 60;
+		for (int i=0; i<=2; i++){
 			robomas[i].hensa = robomas[i].trgVel - robomas[i].actVel;
 			if (robomas[i].hensa >= 1000) robomas[i].hensa = 1000;
 			else if (robomas[i].hensa <= -1000) robomas[i].hensa = -1000;
@@ -133,7 +125,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 			TxData_motor[i*2+1] = (uint8_t)((robomas[i].cu) & 0xff);
 			robomas[i].p_actVel = robomas[i].actVel;
 		}
-
 		if (HAL_FDCAN_AddMessageToTxFifoQ(&hfdcan3, &TxHeader_motor, TxData_motor) != HAL_OK){
 			printf("addmassage is error\r\n");
 			Error_Handler();
@@ -149,13 +140,13 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
 			printf("fdcan_getrxmessage_motor is error\r\n");
 			Error_Handler();
 		}
-		int i = 0;
-		if (RxHeader_motor.Identifier == (robomas[i].CANID)) {
-			robomas[i].angle = (int16_t)((RxData_motor[0] << 8) | RxData_motor[1]);
-			robomas[i].actVel = (int16_t)((RxData_motor[2] << 8) | RxData_motor[3]);
-			robomas[i].actCurrent = (int16_t)((RxData_motor[4] << 8) | RxData_motor[5]);
+		for (int i = 0; i < 3; i++) {
+			if (RxHeader_motor.Identifier == (robomas[i].CANID)) {
+				robomas[i].angle = (int16_t)((RxData_motor[0] << 8) | RxData_motor[1]);
+				robomas[i].actVel = (int16_t)((RxData_motor[2] << 8) | RxData_motor[3]);
+				robomas[i].actCurrent = (int16_t)((RxData_motor[4] << 8) | RxData_motor[5]);
+			}
 		}
-
 
 	}
 
@@ -185,7 +176,7 @@ void FDCAN_RxTxSettings(void){
 	FDCAN_Filter_settings.FilterType = FDCAN_FILTER_RANGE;
 	FDCAN_Filter_settings.FilterConfig = FDCAN_FILTER_TO_RXFIFO1;
 	FDCAN_Filter_settings.FilterID1 = 0x000;
-	FDCAN_Filter_settings.FilterID2 = 0x500;
+	FDCAN_Filter_settings.FilterID2 = 0x600;
 
 	TxHeader.Identifier = 0x000;
 	TxHeader.IdType = FDCAN_STANDARD_ID;
@@ -312,6 +303,8 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	  printf("%d, %d\r\n", state, sub_state);
+	  HAL_Delay(10);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -433,7 +426,7 @@ static void MX_FDCAN3_Init(void)
   hfdcan3.Init.NominalPrescaler = 4;
   hfdcan3.Init.NominalSyncJumpWidth = 1;
   hfdcan3.Init.NominalTimeSeg1 = 15;
-  hfdcan3.Init.NominalTimeSeg2 = 2;
+  hfdcan3.Init.NominalTimeSeg2 = 4;
   hfdcan3.Init.DataPrescaler = 2;
   hfdcan3.Init.DataSyncJumpWidth = 1;
   hfdcan3.Init.DataTimeSeg1 = 15;
@@ -567,6 +560,7 @@ void Error_Handler(void)
   /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
   __disable_irq();
+  printf("Error\r\n");
   while (1)
   {
   }
