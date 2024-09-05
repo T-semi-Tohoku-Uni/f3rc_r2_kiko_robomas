@@ -101,6 +101,11 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 		robomas[0].trgVel = 36 * 45;
 		robomas[1].trgVel = -36 * 90;
 		robomas[2].trgVel = -36 * 60;
+		if (0 == state || 1 == state) {
+			robomas[0].trgVel = 0;
+			robomas[1].trgVel = 0;
+			robomas[2].trgVel = 0;
+		}
 		for (int i=0; i<=2; i++){
 			robomas[i].hensa = robomas[i].trgVel - robomas[i].actVel;
 			if (robomas[i].hensa >= 1000) robomas[i].hensa = 1000;
